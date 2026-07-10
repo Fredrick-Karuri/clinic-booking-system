@@ -5,7 +5,7 @@ Doctor ORM model. Deliberately excludes any patient-facing PII field
 (email, phone) — this table only carries what the booking API needs
 to compute availability.
 """
-
+from typing import TYPE_CHECKING
 import uuid
 from datetime import datetime, time
 
@@ -14,6 +14,9 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.appointment import Appointment
 
 
 class Doctor(Base):
