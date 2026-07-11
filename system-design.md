@@ -1,6 +1,6 @@
 # Clinic Booking System — Design Document
 
-**Author:** Candidate submission (Savannah Informatics Backend Assessment)
+**Author:** Fredrick Karuri
 **Date:** 2026-07-10
 **Status:** Draft
 **Stack:** FastAPI, PostgreSQL, SQLAlchemy 2.0 (async), Alembic, pytest, GitHub Actions, Railway

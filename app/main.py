@@ -1,34 +1,25 @@
 """
-app/core/database.py
+app/main.py
 
-Async SQLAlchemy engine and session factory. Provides the FastAPI
-dependency used by routes to obtain a request-scoped database session.
+FastAPI application instantiation and router registration. Entrypoint
+used by uvicorn (`uvicorn app.main:app`).
 """
 
-from collections.abc import AsyncGenerator
+from fastapi import FastAPI
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+from app.api.routes import appointments, doctors
 
-from app.core.config import get_settings
-
-settings = get_settings()
-
-engine = create_async_engine(settings.database_url, echo=False, pool_pre_ping=True)
-
-AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False,
+app = FastAPI(
+    title="Clinic Booking API",
+    description="Backend API for booking, cancelling, and rescheduling clinic appointments.",
+    version="0.1.0",
 )
 
+app.include_router(doctors.router)
+app.include_router(appointments.router)
 
-class Base(DeclarativeBase):
-    """Declarative base class for all ORM models."""
 
-
-async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Yield a request-scoped async database session."""
-    async with AsyncSessionLocal() as session:
-        yield session
+@app.get("/health", tags=["system"])
+async def health_check() -> dict[str, str]:
+    """Liveness check used by deployment platforms and CI smoke tests."""
+    return {"status": "ok"}

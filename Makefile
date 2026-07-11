@@ -13,7 +13,7 @@ run: ## Run the API locally with autoreload (requires DB already running)
 	uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 test: ## Run the test suite (same command CI runs)
-	pytest -v
+	PYTHONPATH=. pytest -v
 
 lint: ## Run static checks (ruff)
 	ruff check app
