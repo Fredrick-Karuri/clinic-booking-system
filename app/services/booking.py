@@ -97,7 +97,8 @@ def _validate_slot(
                 f"({doctor.work_start}–{doctor.work_end})."
             )
         raise SlotNotOnGridError(
-            f"Slot {slot_time.isoformat()} does not align with the {slot_duration_minutes}-minute booking grid."
+            f"Slot {slot_time.isoformat()} does not align with the"
+            f"{slot_duration_minutes}-minute booking grid."
         )
 
     if slot_time < now:
@@ -105,7 +106,8 @@ def _validate_slot(
 
     if slot_time < now + timedelta(minutes=booking_lead_time_minutes):
         raise SlotTooSoonError(
-            f"Slot {slot_time.isoformat()} is within the {booking_lead_time_minutes}-minute booking lead time."
+            f"Slot {slot_time.isoformat()} is within the"
+            f"{booking_lead_time_minutes}-minute booking lead time."
         )
 
 

@@ -5,9 +5,9 @@ Doctor ORM model. Deliberately excludes any patient-facing PII field
 (email, phone) — this table only carries what the booking API needs
 to compute availability.
 """
-from typing import TYPE_CHECKING
 import uuid
 from datetime import datetime, time
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Time, func
 from sqlalchemy.dialects.postgresql import UUID

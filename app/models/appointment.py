@@ -7,10 +7,10 @@ once" — it is what makes the invariant hold even if application-level
 locking has a bug. See services/booking.py for how it's used alongside
 SELECT ... FOR UPDATE.
 """
-from typing import TYPE_CHECKING
 import enum
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Index, String, func, text
 from sqlalchemy.dialects.postgresql import UUID

@@ -4,7 +4,7 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "%-12s %s\n", $$1, $$2}'
 
 venv: ## Create a local virtualenv at .venv
-	python3 -m venv .venv
+	python3.12 -m venv .venv
 
 install: ## Install Python dependencies
 	pip install -r requirements.txt
@@ -13,7 +13,7 @@ run: ## Run the API locally with autoreload (requires DB already running)
 	uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 test: ## Run the test suite (same command CI runs)
-	PYTHONPATH=. pytest -v
+	PYTHONPATH=. pytest --cov --cov-report=term-missing
 
 lint: ## Run static checks (ruff)
 	ruff check app

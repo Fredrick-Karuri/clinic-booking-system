@@ -7,7 +7,7 @@ used by uvicorn (`uvicorn app.main:app`).
 
 from fastapi import FastAPI
 
-from app.api.routes import appointments, doctors,patients
+from app.api.routes import appointments, doctors, patients
 
 app = FastAPI(
     title="Clinic Booking API",
