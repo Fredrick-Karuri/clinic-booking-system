@@ -91,7 +91,7 @@ API will be at `http://localhost:8000`, docs at `http://localhost:8000/docs`.
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-make install                      # installs requirements-dev.txt
+make install                      # installs requirements.txt
 cp .env.example .env              # edit DATABASE_URL to point at your local Postgres
 make migrate
 make seed
@@ -99,7 +99,7 @@ make run                          # http://localhost:8000
 ```
 
 This path **was** run and verified end-to-end multiple times during development, including
-against a from-scratch virtualenv built strictly from `requirements-dev.txt` (see Testing below).
+against a from-scratch virtualenv built strictly from `requirements.txt` (see Testing below).
 
 ### Auth for local testing
 
@@ -169,7 +169,7 @@ deterministically, and two cosmetic `__repr__` methods.
 
 - Triggers on every pull request into `main`, and on push to `main`.
 - Spins up a real Postgres 16 service container (not SQLite).
-- Installs `requirements-dev.txt`, runs `alembic upgrade head`, then `pytest --cov`.
+- Installs `requirements.txt`, runs `alembic upgrade head`, then `pytest --cov`.
 - A failing test blocks the PR from being merged (with branch protection enabled on `main` in
   the repo settings).
 
