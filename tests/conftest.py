@@ -35,6 +35,24 @@ async def db_session(db_engine):
     async with session_factory() as session:
         yield session
 
+@pytest_asyncio.fixture(autouse=True)
+async def override_app_db_dependency(db_engine):
+    """Force the app's DB dependency onto this test's function-scoped
+    engine/loop instead of the app's module-level singleton engine,
+    whose pooled connections cannot cross event loops."""
+    from app.core.database import get_db_session
+    from app.main import app
+
+    session_factory = async_sessionmaker(bind=db_engine, expire_on_commit=False, autoflush=False)
+
+    async def _get_db_session_override():
+        async with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db_session] = _get_db_session_override
+    yield
+    app.dependency_overrides.pop(get_db_session, None)
+
 
 @pytest_asyncio.fixture
 async def session_factory(db_engine):

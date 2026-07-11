@@ -2,7 +2,8 @@
 app/tests/test_booking.py
 
 Tests for the booking service, run against real
-Postgres. The concurrency test: N simultaneous requests for the same slot must yield exactly
+Postgres. The concurrency test is the one the whole exercise is built
+around: N simultaneous requests for the same slot must yield exactly
 one success.
 """
 
@@ -15,6 +16,7 @@ import pytest
 from app.models import AppointmentStatus
 from app.services.booking import (
     BookingRequest,
+    DoctorNotFoundError,
     SlotAlreadyBookedError,
     SlotInPastError,
     SlotNotOnGridError,
@@ -81,14 +83,31 @@ async def test_book_appointment_in_past(db_session, test_doctor, patient_id):
 
 
 async def test_book_appointment_within_lead_time(db_session, test_doctor, patient_id):
-    # Doctor's working hours are wide (09:00-17:00); pick "now" rounded
-    # up to the next slot boundary, which will be within the 60-min lead time.
+    # Pick a grid-aligned slot that's within the 60-min lead time but not
+    # outside working hours or off-grid, so this precisely exercises
+    # SlotTooSoonError rather than a different validation branch.
     now = datetime.now(timezone.utc)
-    next_slot = now.replace(second=0, microsecond=0) + timedelta(minutes=5)
-    with pytest.raises((SlotTooSoonError, SlotOutsideWorkingHoursError, SlotNotOnGridError)):
+    # Round up to the next 30-min grid boundary within working hours.
+    candidate = now.replace(minute=30 if now.minute < 30 else 0, second=0, microsecond=0)
+    if now.minute >= 30:
+        candidate += timedelta(hours=1)
+    # Force it to be within the 60-min lead time and inside 09:00-17:00.
+    candidate = candidate.replace(hour=max(9, min(candidate.hour, 16)))
+    with pytest.raises(SlotTooSoonError):
         await book_appointment(
             db_session,
-            BookingRequest(doctor_id=test_doctor.id, patient_id=patient_id, slot_time=next_slot),
+            BookingRequest(doctor_id=test_doctor.id, patient_id=patient_id, slot_time=candidate),
+            slot_duration_minutes=SLOT_DURATION,
+            booking_lead_time_minutes=1440,  # 24h lead time makes any near slot "too soon"
+        )
+
+
+async def test_book_appointment_unknown_doctor(db_session, patient_id):
+    slot_time = _future_slot(days=3, hour=10)
+    with pytest.raises(DoctorNotFoundError):
+        await book_appointment(
+            db_session,
+            BookingRequest(doctor_id=uuid.uuid4(), patient_id=patient_id, slot_time=slot_time),
             slot_duration_minutes=SLOT_DURATION,
             booking_lead_time_minutes=LEAD_TIME,
         )

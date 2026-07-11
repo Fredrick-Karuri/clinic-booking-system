@@ -1,12 +1,12 @@
 """
 app/tests/test_cancel_reschedule.py
 
-Tests for cancel_appointment and reschedule_appointment,
+Tests for cancel_appointment and reschedule_appointment, 
 run against real Postgres. 
-Covers: a failed
-reschedule must never lose the patient's original slot, and two
-concurrent reschedules targeting the same new slot must not both
-succeed.
+
+Covers: a failed reschedule must never lose the patient's original slot, 
+and two concurrent reschedules targeting the same new slot must not both succeed.
+
 """
 
 import asyncio
@@ -18,9 +18,11 @@ import pytest
 from app.models import AppointmentStatus
 from app.services.booking import (
     AppointmentAlreadyCancelledError,
+    AppointmentNotFoundError,
     BookingRequest,
     NotAppointmentOwnerError,
     SlotAlreadyBookedError,
+    SlotOutsideWorkingHoursError,
     book_appointment,
     cancel_appointment,
     reschedule_appointment,
@@ -77,6 +79,11 @@ async def test_cancel_by_non_owner_forbidden(db_session, test_doctor, patient_id
     other_patient = uuid.uuid4()
     with pytest.raises(NotAppointmentOwnerError):
         await cancel_appointment(db_session, appointment.id, other_patient, reason="not mine")
+
+
+async def test_cancel_unknown_appointment(db_session, patient_id):
+    with pytest.raises(AppointmentNotFoundError):
+        await cancel_appointment(db_session, uuid.uuid4(), patient_id, reason="doesn't exist")
 
 
 async def test_cancelled_slot_becomes_bookable_again(db_session, test_doctor, patient_id):
@@ -197,6 +204,66 @@ async def test_reschedule_cancelled_appointment_fails(db_session, test_doctor, p
             slot_duration_minutes=SLOT_DURATION,
             booking_lead_time_minutes=LEAD_TIME,
         )
+
+
+async def test_reschedule_unknown_appointment(db_session, patient_id):
+    new_slot = _future_slot(days=3, hour=11)
+    with pytest.raises(AppointmentNotFoundError):
+        await reschedule_appointment(
+            db_session,
+            uuid.uuid4(),
+            patient_id,
+            new_slot,
+            slot_duration_minutes=SLOT_DURATION,
+            booking_lead_time_minutes=LEAD_TIME,
+        )
+
+
+async def test_reschedule_by_non_owner_forbidden(db_session, test_doctor, patient_id):
+    old_slot = _future_slot(days=3, hour=10)
+    new_slot = _future_slot(days=3, hour=11)
+
+    original = await book_appointment(
+        db_session,
+        BookingRequest(doctor_id=test_doctor.id, patient_id=patient_id, slot_time=old_slot),
+        slot_duration_minutes=SLOT_DURATION,
+        booking_lead_time_minutes=LEAD_TIME,
+    )
+    other_patient = uuid.uuid4()
+    with pytest.raises(NotAppointmentOwnerError):
+        await reschedule_appointment(
+            db_session,
+            original.id,
+            other_patient,
+            new_slot,
+            slot_duration_minutes=SLOT_DURATION,
+            booking_lead_time_minutes=LEAD_TIME,
+        )
+
+
+async def test_reschedule_outside_working_hours(db_session, test_doctor, patient_id):
+    old_slot = _future_slot(days=3, hour=10)
+    invalid_new_slot = _future_slot(days=3, hour=20)  # doctor works 09:00-17:00
+
+    original = await book_appointment(
+        db_session,
+        BookingRequest(doctor_id=test_doctor.id, patient_id=patient_id, slot_time=old_slot),
+        slot_duration_minutes=SLOT_DURATION,
+        booking_lead_time_minutes=LEAD_TIME,
+    )
+    with pytest.raises(SlotOutsideWorkingHoursError):
+        await reschedule_appointment(
+            db_session,
+            original.id,
+            patient_id,
+            invalid_new_slot,
+            slot_duration_minutes=SLOT_DURATION,
+            booking_lead_time_minutes=LEAD_TIME,
+        )
+    # Original must remain untouched.
+    await db_session.refresh(original)
+    assert original.status == AppointmentStatus.BOOKED
+    assert original.slot_time == old_slot
 
 
 async def test_concurrent_reschedule_same_new_slot_only_one_succeeds(session_factory, test_doctor):
