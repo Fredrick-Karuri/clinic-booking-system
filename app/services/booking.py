@@ -17,7 +17,7 @@ Concurrency safety has two layers, deliberately:
    An IntegrityError from the constraint is caught and translated
    into the same "slot taken" error as the pre-check, so the API
    behaves identically either way.
-   
+
 """
 
 from dataclasses import dataclass
@@ -182,10 +182,13 @@ async def cancel_appointment(
 ) -> Appointment:
     appointment = await db.get(Appointment, appointment_id)
     if appointment is None:
+        await db.rollback()
         raise AppointmentNotFoundError(f"Appointment {appointment_id} not found.")
     if appointment.patient_id != patient_id:
+        await db.rollback()
         raise NotAppointmentOwnerError("You do not have permission to cancel this appointment.")
     if appointment.status == AppointmentStatus.CANCELLED:
+        await db.rollback()
         raise AppointmentAlreadyCancelledError(f"Appointment {appointment_id} is already cancelled.")
 
     appointment.status = AppointmentStatus.CANCELLED
@@ -228,6 +231,7 @@ async def reschedule_appointment(
     if doctor is None:
         await db.rollback()
         raise DoctorNotFoundError(f"Doctor {appointment.doctor_id} not found.")
+    doctor_id = doctor.id  # captured as a plain value — see book_appointment for why
 
     try:
         _validate_slot(doctor, new_slot_time, slot_duration_minutes, booking_lead_time_minutes, now)
@@ -237,7 +241,7 @@ async def reschedule_appointment(
 
     existing = await db.execute(
         select(Appointment)
-        .where(Appointment.doctor_id == appointment.doctor_id, Appointment.slot_time == new_slot_time)
+        .where(Appointment.doctor_id == doctor_id, Appointment.slot_time == new_slot_time)
         .with_for_update()
     )
     existing_row = existing.scalar_one_or_none()
@@ -247,14 +251,14 @@ async def reschedule_appointment(
         # since we haven't modified it yet.
         await db.rollback()
         raise SlotAlreadyBookedError(
-            f"Slot {new_slot_time.isoformat()} for doctor {doctor.id} is already booked."
+            f"Slot {new_slot_time.isoformat()} for doctor {doctor_id} is already booked."
         )
 
     appointment.status = AppointmentStatus.CANCELLED
     appointment.cancellation_reason = "rescheduled"
 
     new_appointment = Appointment(
-        doctor_id=appointment.doctor_id,
+        doctor_id=doctor_id,
         patient_id=patient_id,
         slot_time=new_slot_time,
         status=AppointmentStatus.BOOKED,
@@ -266,7 +270,7 @@ async def reschedule_appointment(
     except IntegrityError as exc:
         await db.rollback()
         raise SlotAlreadyBookedError(
-            f"Slot {new_slot_time.isoformat()} for doctor {doctor.id} is already booked."
+            f"Slot {new_slot_time.isoformat()} for doctor {doctor_id} is already booked."
         ) from exc
 
     await db.refresh(new_appointment)
