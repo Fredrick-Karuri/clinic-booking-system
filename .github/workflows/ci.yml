@@ -45,4 +45,4 @@ jobs:
         run: alembic upgrade head
 
       - name: Run tests with coverage
-        run: pytest --cov --cov-report=term-missing
+        run: PYTHONPATH=. pytest --cov --cov-report=term-missing
