@@ -1,29 +1,21 @@
 """
 app/api/routes/appointments.py
 
-POST /appointments (CLINIC-007), PATCH .../cancel (CLINIC-009),
-PATCH .../reschedule (CLINIC-010). Patient-listing endpoint is added
-in CLINIC-011.
+POST /appointments, PATCH .../cancel, PATCH .../reschedule. 
+Patient-listing endpoint lives in patients.py.
+
+Routes only translate between HTTP and the BookingService — no
+business logic, no persistence, lives here.
 """
 
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_patient_id
-from app.core.config import Settings, get_settings
-from app.core.database import get_db_session
-from app.schemas.appointment import (
-    AppointmentCancelRequest,
-    AppointmentCreate,
-    AppointmentOut,
-    AppointmentRescheduleRequest,
-)
-from app.services.booking import (
+from app.api.deps import get_booking_service, get_current_patient_id
+from app.exceptions import (
     AppointmentAlreadyCancelledError,
     AppointmentNotFoundError,
-    BookingRequest,
     DoctorNotFoundError,
     NotAppointmentOwnerError,
     SlotAlreadyBookedError,
@@ -31,10 +23,14 @@ from app.services.booking import (
     SlotNotOnGridError,
     SlotOutsideWorkingHoursError,
     SlotTooSoonError,
-    book_appointment,
-    cancel_appointment,
-    reschedule_appointment,
 )
+from app.schemas.appointment import (
+    AppointmentCancelRequest,
+    AppointmentCreate,
+    AppointmentOut,
+    AppointmentRescheduleRequest,
+)
+from app.services.booking import BookingRequest, BookingService
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
@@ -45,15 +41,11 @@ _VALIDATION_ERRORS = (SlotOutsideWorkingHoursError, SlotNotOnGridError, SlotInPa
 async def create_appointment(
     payload: AppointmentCreate,
     patient_id=Depends(get_current_patient_id),
-    db: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
+    booking_service: BookingService = Depends(get_booking_service),
 ) -> AppointmentOut:
     try:
-        appointment = await book_appointment(
-            db,
-            BookingRequest(doctor_id=payload.doctor_id, patient_id=patient_id, slot_time=payload.slot_time),
-            slot_duration_minutes=settings.slot_duration_minutes,
-            booking_lead_time_minutes=settings.booking_lead_time_minutes,
+        appointment = await booking_service.book_appointment(
+            BookingRequest(doctor_id=payload.doctor_id, patient_id=patient_id, slot_time=payload.slot_time)
         )
     except DoctorNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -70,10 +62,10 @@ async def cancel_appointment_route(
     appointment_id: uuid.UUID,
     payload: AppointmentCancelRequest,
     patient_id=Depends(get_current_patient_id),
-    db: AsyncSession = Depends(get_db_session),
+    booking_service: BookingService = Depends(get_booking_service),
 ) -> AppointmentOut:
     try:
-        appointment = await cancel_appointment(db, appointment_id, patient_id, payload.reason)
+        appointment = await booking_service.cancel_appointment(appointment_id, patient_id, payload.reason)
     except AppointmentNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except NotAppointmentOwnerError as exc:
@@ -89,17 +81,11 @@ async def reschedule_appointment_route(
     appointment_id: uuid.UUID,
     payload: AppointmentRescheduleRequest,
     patient_id=Depends(get_current_patient_id),
-    db: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
+    booking_service: BookingService = Depends(get_booking_service),
 ) -> AppointmentOut:
     try:
-        new_appointment = await reschedule_appointment(
-            db,
-            appointment_id,
-            patient_id,
-            payload.new_slot_time,
-            slot_duration_minutes=settings.slot_duration_minutes,
-            booking_lead_time_minutes=settings.booking_lead_time_minutes,
+        new_appointment = await booking_service.reschedule_appointment(
+            appointment_id, patient_id, payload.new_slot_time
         )
     except (AppointmentNotFoundError, DoctorNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

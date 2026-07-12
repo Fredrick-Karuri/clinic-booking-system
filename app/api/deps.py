@@ -22,8 +22,11 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
+from app.repositories.appointment.base import AppointmentRepository
+from app.repositories.appointment.postgres import PostgresAppointmentRepository
+from app.services.booking import BookingService
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -77,3 +80,21 @@ async def get_current_patient_id(
         )
 
     return _verify_token(credentials.credentials)
+
+
+def get_appointment_repository(db: AsyncSession = Depends(get_db_session)) -> AppointmentRepository:
+    """The Open/Closed seam: swapping the backing store means providing a
+    different AppointmentRepository implementation here — nothing else
+    (routes, service, business rules) needs to change."""
+    return PostgresAppointmentRepository(db)
+
+
+def get_booking_service(
+    repository: AppointmentRepository = Depends(get_appointment_repository),
+    settings: Settings = Depends(get_settings),
+) -> BookingService:
+    return BookingService(
+        repository=repository,
+        slot_duration_minutes=settings.slot_duration_minutes,
+        booking_lead_time_minutes=settings.booking_lead_time_minutes,
+    )

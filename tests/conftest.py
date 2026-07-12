@@ -10,6 +10,7 @@ faithfully emulate.
 
 import uuid
 from datetime import time
+from  typing import TYPE_CHECKING
 
 import pytest
 import pytest_asyncio
@@ -18,6 +19,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import get_settings
 from app.models import Appointment, Doctor
+
+if TYPE_CHECKING:
+    from app.services.booking import BookingService
 
 settings = get_settings()
 
@@ -34,6 +38,14 @@ async def db_session(db_engine):
     session_factory = async_sessionmaker(bind=db_engine, expire_on_commit=False, autoflush=False)
     async with session_factory() as session:
         yield session
+
+
+@pytest_asyncio.fixture
+async def session_factory(db_engine):
+    """Factory for creating independent sessions, used by concurrency tests
+    that need separate DB connections racing against each other."""
+    return async_sessionmaker(bind=db_engine, expire_on_commit=False, autoflush=False)
+
 
 @pytest_asyncio.fixture(autouse=True)
 async def override_app_db_dependency(db_engine):
@@ -52,13 +64,6 @@ async def override_app_db_dependency(db_engine):
     app.dependency_overrides[get_db_session] = _get_db_session_override
     yield
     app.dependency_overrides.pop(get_db_session, None)
-
-
-@pytest_asyncio.fixture
-async def session_factory(db_engine):
-    """Factory for creating independent sessions, used by concurrency tests
-    that need separate DB connections racing against each other."""
-    return async_sessionmaker(bind=db_engine, expire_on_commit=False, autoflush=False)
 
 
 @pytest_asyncio.fixture
@@ -83,3 +88,34 @@ async def test_doctor(db_session: AsyncSession):
 @pytest.fixture
 def patient_id() -> uuid.UUID:
     return uuid.uuid4()
+
+
+SLOT_DURATION_MINUTES = 30
+BOOKING_LEAD_TIME_MINUTES = 60
+
+
+@pytest_asyncio.fixture
+async def booking_service(db_session: AsyncSession):
+    """A BookingService wired to db_session via the Postgres repository —
+    used by service-layer tests that don't need a separate connection."""
+    from app.repositories.appointment.postgres import PostgresAppointmentRepository
+    from app.services.booking import BookingService
+
+    return BookingService(
+        PostgresAppointmentRepository(db_session),
+        slot_duration_minutes=SLOT_DURATION_MINUTES,
+        booking_lead_time_minutes=BOOKING_LEAD_TIME_MINUTES,
+    )
+
+
+def make_booking_service(session: AsyncSession) -> "BookingService":  # noqa: F821
+    """Helper for concurrency tests that need a fresh BookingService per
+    independently-created session (see session_factory fixture)."""
+    from app.repositories.appointment.postgres import PostgresAppointmentRepository
+    from app.services.booking import BookingService
+
+    return BookingService(
+        PostgresAppointmentRepository(session),
+        slot_duration_minutes=SLOT_DURATION_MINUTES,
+        booking_lead_time_minutes=BOOKING_LEAD_TIME_MINUTES,
+    )

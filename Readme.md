@@ -39,6 +39,27 @@ concurrent requests, which is the primary failure mode a naive implementation hi
 | Reschedule | Single transaction: validate + lock new slot, only then cancel the old appointment and create the new one | A failed reschedule must never lose the patient's original booking |
 | Timezone handling | All datetimes stored and compared in UTC (`TIMESTAMPTZ`) | Avoids DST ambiguity; correct today and if the clinic adds doctors in other timezones later |
 | Auth | Minimal bearer-token scheme: token → `patient_id`, never trusted from the request body | Closes the "book on behalf of anyone" hole with minimal scope. **Not** a full identity system — see Non-Goals |
+| Layering | Repository pattern: `AppointmentRepository` (abstract) / `PostgresAppointmentRepository` (concrete), a thin `BookingService` for business rules/orchestration, `app/exceptions.py` for the error hierarchy | Real single-responsibility, not just file-per-module: the service has no SQL/session handling, the repository has no business rules. Swapping the backing store means writing a new repository, not touching business logic |
+
+### A Refactor Worth Documenting: Separating Concerns in the Booking Logic
+
+The first working version of the booking logic lived in a single `services/booking.py`
+combining the exception hierarchy, business validation, and persistence/locking mechanics —
+it worked and was fully tested, but mixed three responsibilities that should be independently
+testable and independently replaceable. Refactored into `app/exceptions.py` (business rules
+only), `app/repositories/appointment_repository.py` (an abstract interface defining the
+atomicity + conflict-signaling contract any backing store must satisfy),
+`app/repositories/postgres_appointment_repository.py` (the Postgres implementation owning
+`SELECT ... FOR UPDATE`, commit/rollback, `IntegrityError` translation), and
+`app/services/booking_service.py` (a `BookingService` with zero SQL, zero session handling —
+only validation and orchestration, injected with a repository via FastAPI's `Depends()`).
+
+This is real Open/Closed, not aspirational: a new backend means implementing
+`AppointmentRepository`, not touching `BookingService`. One honest caveat — the concurrency
+guarantees this system depends on (row locking + a partial unique constraint) are fairly
+Postgres-specific, so swapping databases wouldn't preserve those exact guarantees for free. The
+separation is still worth it for readability and testability even where "swap the database" is
+more theoretical than likely here.
 
 ### Data Model
 
@@ -91,7 +112,7 @@ API will be at `http://localhost:8000`, docs at `http://localhost:8000/docs`.
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-make install                      # installs requirements.txt
+make install                      # installs requirements-dev.txt
 cp .env.example .env              # edit DATABASE_URL to point at your local Postgres
 make migrate
 make seed
@@ -99,7 +120,7 @@ make run                          # http://localhost:8000
 ```
 
 This path **was** run and verified end-to-end multiple times during development, including
-against a from-scratch virtualenv built strictly from `requirements.txt` (see Testing below).
+against a from-scratch virtualenv built strictly from `requirements-dev.txt` (see Testing below).
 
 ### Auth for local testing
 
@@ -139,10 +160,27 @@ Interactive docs at `/docs` (Swagger UI) once running.
 make test
 ```
 
-**51/51 tests passing, 98% coverage** on `app/` (measured with `concurrency = greenlet` in
-`.coveragerc` — SQLAlchemy's async extension uses greenlet-based context switching that
-coverage.py's default tracer doesn't follow, which under-reported route-level coverage by ~40
-points before this was configured correctly).
+Runs `PYTHONPATH=. pytest --cov --cov-report=term-missing` — the explicit `PYTHONPATH=.` isn't
+strictly required by pytest's default import-mode given this package layout, but makes the
+command work the same way regardless of invocation context (different cwd, IDE runner, etc.)
+rather than relying on an implicit pytest behavior.
+
+**52/52 tests passing, 98% coverage** on `app/`, stable across repeated runs. Getting an accurate
+number here took two real fixes, not just enabling `--cov`:
+
+- **Event loop / connection pool mismatch.** `pytest.ini` originally used a session-scoped
+  event loop while DB fixtures were function-scoped, causing `InterfaceError`/`RuntimeError`
+  failures as connections got torn down on a loop that outlived them. Fixed by using
+  function-scoped loops (`asyncio_default_fixture_loop_scope = function`) *and* adding an
+  autouse fixture that overrides the app's `get_db_session` dependency to use each test's own
+  engine — without that override, the app's module-level singleton engine (bound to whatever
+  loop happened to create it first) would conflict with per-test loops the moment more than one
+  async test ran.
+- **Coverage under-reporting by ~40 points.** SQLAlchemy's async extension uses greenlet-based
+  context switching, and FastAPI runs sync dependency functions in a threadpool — coverage.py's
+  default tracer follows neither. `.coveragerc` now sets `concurrency = greenlet, thread`; before
+  this, `app/api/deps.py` and the repository's `IntegrityError`-handling branch looked completely
+  untested despite being exercised by every test that hit them.
 
 Everything runs against a **real Postgres instance**, not SQLite or mocks — the concurrency
 guarantees under test (`SELECT ... FOR UPDATE`, the partial unique constraint) are Postgres-
@@ -156,10 +194,14 @@ Two tests matter most:
   the same new slot simultaneously; exactly 1 succeeds, the loser's original appointment is
   confirmed still intact.
 
-The remaining 2% of uncovered lines are documented in the coverage run, not silently ignored:
-two branches unreachable via the API (the doctor-FK has `ondelete=CASCADE`, so an appointment
-can never point at a deleted doctor), one concurrency backstop not worth force-triggering
-deterministically, and two cosmetic `__repr__` methods.
+The remaining ~2% of uncovered lines are documented, not silently ignored: two branches
+unreachable via the API (the doctor FK has `ondelete=CASCADE`, so an appointment can never point
+at a deleted doctor), the repository's `IntegrityError` backstop path in `reschedule()` (hit
+inconsistently across runs depending on task-scheduling timing under the concurrency test — a
+genuinely racy line, confirmed by running coverage three times in a row and seeing it flip), the
+real `get_db_session` implementation (never exercised by the test suite by design, since tests
+override it to use their own engine — it does run in every actual request in the deployed app),
+and two cosmetic `__repr__` methods.
 
 ---
 
@@ -169,7 +211,7 @@ deterministically, and two cosmetic `__repr__` methods.
 
 - Triggers on every pull request into `main`, and on push to `main`.
 - Spins up a real Postgres 16 service container (not SQLite).
-- Installs `requirements.txt`, runs `alembic upgrade head`, then `pytest --cov`.
+- Installs `requirements-dev.txt`, runs `alembic upgrade head`, then `pytest --cov`.
 - A failing test blocks the PR from being merged (with branch protection enabled on `main` in
   the repo settings).
 
