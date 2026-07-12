@@ -1,4 +1,4 @@
-.PHONY: help venv install run test lint up down migrate seed logs
+.PHONY: help venv install run test lint up down migrate seed token logs
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "%-12s %s\n", $$1, $$2}'
@@ -30,5 +30,15 @@ migrate: ## Apply Alembic migrations
 seed: ## Populate the database with sample doctors
 	python -m app.scripts.seed
 
+token: ## Generate a bearer token for a random patient_id (or PATIENT_ID=<uuid> for a fixed one)
+	PATIENT_ID=$(PATIENT_ID) python -c "\
+	import os, uuid; \
+	from app.api.deps import issue_token; \
+	pid = os.environ.get('PATIENT_ID') or None; \
+	print(issue_token(uuid.UUID(pid) if pid else uuid.uuid4()))"
+
 logs: ## Tail docker-compose logs
 	docker-compose logs -f
+
+psql: ## Open a psql shell into the running db container
+	docker-compose exec db psql -U postgres -d clinic

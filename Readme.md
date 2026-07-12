@@ -6,7 +6,7 @@ reschedule 30-minute appointment slots — built for the Savannah Informatics ba
 **Stack:** FastAPI · PostgreSQL · SQLAlchemy 2.0 (async) · Alembic · pytest · GitHub Actions · Railway
 
 - **Deployed URL:** `<fill in after Railway deploy — see Deployment section>`
-- **Repository:** `<fill in your GitHub/GitLab URL>`
+- **Repository:** `https://github.com/Fredrick-Karuri/clinic-booking-system`
 
 ---
 
@@ -127,10 +127,18 @@ against a from-scratch virtualenv built strictly from `requirements-dev.txt` (se
 There's no registration endpoint (out of scope). To get a valid bearer token for a given
 `patient_id`, issue one with the same signing scheme the API uses:
 
-```python
-from app.api.deps import issue_token
-import uuid
-print(issue_token(uuid.uuid4()))
+```bash
+make token                                                    # random patient_id
+make token PATIENT_ID=11111111-1111-1111-1111-111111111111    # fixed patient_id — useful for
+                                                               # reproducing the same identity
+                                                               # across multiple terminal sessions
+                                                               # (e.g. testing 403 ownership checks)
+```
+
+### Inspecting the database directly
+
+```bash
+make psql   # opens a psql shell into the running db container (docker-compose exec db psql -U postgres -d clinic)
 ```
 
 ---
