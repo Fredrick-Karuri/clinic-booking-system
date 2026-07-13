@@ -100,14 +100,6 @@ make migrate      # in a second terminal, once the DB is healthy
 make seed
 ```
 
-API will be at `http://localhost:8000`, docs at `http://localhost:8000/docs`.
-
-> **Note:** Docker itself could not be executed in the environment this was built in, so
-> `make up` has not been run end-to-end against a live Docker daemon. The Dockerfile and
-> `docker-compose.yml` follow the standard pattern and were reviewed for correctness, but please
-> run `make up` once yourself to confirm before relying on it — flagging this rather than
-> claiming untested things work.
-
 ### Option B — Local Python + local Postgres
 
 ```bash
@@ -118,9 +110,6 @@ make migrate
 make seed
 make run                          # http://localhost:8000
 ```
-
-This path **was** run and verified end-to-end multiple times during development, including
-against a from-scratch virtualenv built strictly from `requirements-dev.txt` (see Testing below).
 
 ### Auth for local testing
 

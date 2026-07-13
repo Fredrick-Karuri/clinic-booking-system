@@ -8,6 +8,7 @@ the codebase.
 
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_SLOT_DURATION_MINUTES = 30
@@ -21,6 +22,18 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/clinic"
     environment: str = "development"
+
+    @field_validator("database_url")
+    @classmethod
+    def _force_asyncpg_driver(cls, v: str) -> str:
+        """Railway (and most managed Postgres providers) hand out a plain
+        postgresql:// URL. SQLAlchemy defaults that to the sync psycopg2
+        driver, which this project never installs — normalize to the
+        async driver regardless of what the platform provides."""
+        if v.startswith("postgresql://"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
+
 
     slot_duration_minutes: int = DEFAULT_SLOT_DURATION_MINUTES
     booking_lead_time_minutes: int = DEFAULT_BOOKING_LEAD_TIME_MINUTES
