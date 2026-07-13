@@ -27,6 +27,8 @@ class Settings(BaseSettings):
 
     auth_token_seed: str = "dev-only-insecure-seed-change-in-production"
 
+    log_level: str = "INFO"
+
 
 @lru_cache
 def get_settings() -> Settings:

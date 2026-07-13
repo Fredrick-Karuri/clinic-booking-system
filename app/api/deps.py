@@ -24,9 +24,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
+from app.core.logging_config import get_logger
 from app.repositories.appointment.base import AppointmentRepository
 from app.repositories.appointment.postgres import PostgresAppointmentRepository
 from app.services.booking import BookingService
+
+logger = get_logger("app.auth")
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -46,6 +49,7 @@ def _verify_token(token: str) -> uuid.UUID:
         patient_id_str, signature = token.rsplit(".", 1)
         patient_id = uuid.UUID(patient_id_str)
     except (ValueError, AttributeError) as exc:
+        logger.warning("auth_token_malformed")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token."
         ) from exc
@@ -55,6 +59,7 @@ def _verify_token(token: str) -> uuid.UUID:
     ).hexdigest()
 
     if not hmac.compare_digest(signature, expected_signature):
+        logger.warning("auth_signature_invalid", extra={"claimed_patient_id": patient_id_str})
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token."
         )

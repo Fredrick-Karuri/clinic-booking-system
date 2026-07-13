@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+from app.core.logging_config import get_logger
 from app.exceptions import (
     AppointmentAlreadyCancelledError,
     AppointmentNotFoundError,
@@ -29,6 +30,7 @@ from app.models import Appointment, AppointmentStatus, Doctor
 from app.repositories.appointment.base import AppointmentRepository, SlotConflictError
 from app.services.availability import is_slot_on_grid
 
+logger = get_logger("app.booking")
 
 @dataclass
 class BookingRequest:
@@ -58,11 +60,30 @@ class BookingService:
         self._validate_slot(doctor, request.slot_time, now)
 
         try:
-            return await self._repository.create_booked_appointment(
+            appointment =  await self._repository.create_booked_appointment(
                 request.doctor_id, request.patient_id, request.slot_time
             )
         except SlotConflictError as exc:
+            logger.warning(
+                "booking_conflict",
+                extra={
+                    "doctor_id": str(request.doctor_id),
+                    "patient_id": str(request.patient_id),
+                    "slot_time": request.slot_time.isoformat(),
+                },
+            )
             raise SlotAlreadyBookedError(str(exc)) from exc
+        
+        logger.info(
+            "appointment_booked",
+            extra={
+                "appointment_id": str(appointment.id),
+                "doctor_id": str(request.doctor_id),
+                "patient_id": str(request.patient_id),
+                "slot_time": request.slot_time.isoformat(),
+            },
+        )
+        return appointment
 
     async def cancel_appointment(self, appointment_id: UUID, patient_id: UUID, reason: str) -> Appointment:
         appointment = await self._repository.get_appointment(appointment_id)
@@ -73,7 +94,12 @@ class BookingService:
         if appointment.status == AppointmentStatus.CANCELLED:
             raise AppointmentAlreadyCancelledError(f"Appointment {appointment_id} is already cancelled.")
 
-        return await self._repository.save_cancellation(appointment, reason)
+        cancelled =  await self._repository.save_cancellation(appointment, reason)
+        logger.info(
+            "appointment_cancelled",
+            extra={"appointment_id": str(appointment_id), "patient_id": str(patient_id), "reason": reason},
+        )
+        return cancelled
 
     async def reschedule_appointment(
         self, appointment_id: UUID, patient_id: UUID, new_slot_time: datetime
@@ -97,9 +123,27 @@ class BookingService:
         self._validate_slot(doctor, new_slot_time, now)
 
         try:
-            return await self._repository.reschedule(appointment, new_slot_time)
+            new_appointment = await self._repository.reschedule(appointment, new_slot_time)
         except SlotConflictError as exc:
+            logger.warning(
+                "reschedule_conflict",
+                extra={
+                    "appointment_id": str(appointment_id),
+                    "patient_id": str(patient_id),
+                    "new_slot_time": new_slot_time.isoformat(),
+                },
+            )
             raise SlotAlreadyBookedError(str(exc)) from exc
+        logger.info(
+            "appointment_rescheduled",
+            extra={
+                "old_appointment_id": str(appointment_id),
+                "new_appointment_id": str(new_appointment.id),
+                "patient_id": str(patient_id),
+                "new_slot_time": new_slot_time.isoformat(),
+            },
+        )
+        return new_appointment
         
     def _validate_slot(self, doctor: Doctor, slot_time: datetime, now: datetime) -> None:
         """Raise the appropriate BookingError if slot_time is not

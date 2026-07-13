@@ -8,12 +8,18 @@ used by uvicorn (`uvicorn app.main:app`).
 from fastapi import FastAPI
 
 from app.api.routes import appointments, doctors, patients
+from app.core.logging_config import configure_logging
+from app.core.middleware import RequestLoggingMiddleware
+
+configure_logging()
 
 app = FastAPI(
     title="Clinic Booking API",
     description="Backend API for booking, cancelling, and rescheduling clinic appointments.",
     version="0.1.0",
 )
+
+app.add_middleware(RequestLoggingMiddleware)
 
 app.include_router(doctors.router)
 app.include_router(appointments.router)
