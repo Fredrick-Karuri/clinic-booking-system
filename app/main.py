@@ -6,6 +6,7 @@ used by uvicorn (`uvicorn app.main:app`).
 """
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 
 from app.api.routes import appointments, doctors, patients
 from app.core.logging_config import configure_logging
@@ -30,3 +31,9 @@ app.include_router(patients.router)
 async def health_check() -> dict[str, str]:
     """Liveness check used by deployment platforms and CI smoke tests."""
     return {"status": "ok"}
+
+@app.get("/", include_in_schema=False)
+async def root() -> RedirectResponse:
+    """Convenience redirect so visiting the bare deployed URL lands
+    somewhere useful instead of a bare 404."""
+    return RedirectResponse(url="/docs")
