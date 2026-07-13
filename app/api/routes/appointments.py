@@ -1,7 +1,7 @@
 """
 app/api/routes/appointments.py
 
-POST /appointments, PATCH .../cancel, PATCH .../reschedule. 
+POST /appointments, PATCH .../cancel, PATCH .../reschedule.
 Patient-listing endpoint lives in patients.py.
 
 Routes only translate between HTTP and the BookingService — no

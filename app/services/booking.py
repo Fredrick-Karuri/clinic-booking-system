@@ -73,7 +73,7 @@ class BookingService:
                 },
             )
             raise SlotAlreadyBookedError(str(exc)) from exc
-        
+
         logger.info(
             "appointment_booked",
             extra={
@@ -144,7 +144,7 @@ class BookingService:
             },
         )
         return new_appointment
-        
+
     def _validate_slot(self, doctor: Doctor, slot_time: datetime, now: datetime) -> None:
         """Raise the appropriate BookingError if slot_time is not
         bookable, independent of whether it's actually taken — that's
