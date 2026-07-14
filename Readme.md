@@ -3,6 +3,9 @@
 A REST API for a small clinic (5 doctors) to let patients view availability, book, cancel, and
 reschedule 30-minute appointment slots.
 
+**Stack:** Python (FastAPI) · PostgreSQL · SQLAlchemy 2.0 (async) · Alembic · pytest ·
+GitHub Actions · Railway
+
 - **Deployed URL:** https://clinic-booking.up.railway.app/
 - **Repository:** https://github.com/Fredrick-Karuri/clinic-booking-system
 - **Interactive API docs (Swagger):** https://clinic-booking.up.railway.app/docs
