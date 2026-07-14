@@ -1,4 +1,4 @@
-.PHONY: help venv install run test lint up down migrate seed token logs
+.PHONY: help venv install run test lint up down migrate seed token logs psql railway-logs railway-psql
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "%-12s %s\n", $$1, $$2}'
@@ -42,3 +42,9 @@ logs: ## Tail docker-compose logs
 
 psql: ## Open a psql shell into the running db container
 	docker-compose exec db psql -U postgres -d clinic
+
+railway-logs: ## Tail logs from the deployed Railway service
+	railway logs
+
+railway-psql: ## Open a psql shell against the deployed Railway Postgres (public proxy)
+	railway connect Postgres

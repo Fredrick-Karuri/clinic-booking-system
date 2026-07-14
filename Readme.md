@@ -17,8 +17,9 @@ system (availability, cancellation, rescheduling) simple and well-tested.
 
 ## Who It's For
 
-Reviewers assessing backend engineering craft: system design reasoning, concurrency-safe API
-implementation, test discipline, and a real CI/CD + cloud deployment — not just a working demo.
+Small clinics that currently manage appointment booking manually (phone, spreadsheet, or a
+front-desk notebook) and want a self-service booking API their patients — or a frontend built
+on top of it — can use directly.
 
 ## Experience Promise
 
@@ -57,4 +58,5 @@ directly, see [docs/getting-started.md](docs/getting-started.md).
 | [docs/testing.md](docs/testing.md) | Test strategy, coverage, the concurrency bugs found along the way |
 | [docs/observability.md](docs/observability.md) | Structured logging, what's instrumented, what's deliberately not (yet) |
 | [docs/deployment.md](docs/deployment.md) | CI/CD pipeline, Railway deployment, the gotchas hit getting there |
+| [docs/testing-the-api.md](docs/testing-the-api.md) | Step-by-step script for manually demoing/exercising the full booking flow |
 | [REFLECTION.md](REFLECTION.md) | AI usage reflection |
