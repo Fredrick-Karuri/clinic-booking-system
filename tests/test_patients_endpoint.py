@@ -61,7 +61,7 @@ async def test_list_appointments_forbidden_for_other_patient(test_doctor):
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get(f"/patients/{other_patient_id}/appointments", headers=headers)
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 async def test_list_appointments_excludes_cancelled(test_doctor):

@@ -14,9 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
+from app.exceptions import PastDateError
 from app.models import Appointment, AppointmentStatus, Doctor
 from app.schemas.doctor import AvailabilityResponse
-from app.services.availability import compute_available_slots
+from app.services.availability import compute_available_slots, validate_target_date
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 
@@ -34,6 +35,14 @@ async def get_doctor_availability(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"Doctor {doctor_id} not found."
         )
 
+    now = datetime.now(timezone.utc)
+
+    try:
+        validate_target_date(date, now)
+    except PastDateError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
     result = await db.execute(
         select(Appointment.slot_time).where(
             Appointment.doctor_id == doctor_id,
@@ -50,7 +59,7 @@ async def get_doctor_availability(
         target_date=date,
         taken_slot_times=taken_slot_times,
         slot_duration_minutes=settings.slot_duration_minutes,
-        now=datetime.now(timezone.utc),
+        now=now,
         booking_lead_time_minutes=settings.booking_lead_time_minutes,
     )
 
