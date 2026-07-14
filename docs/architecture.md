@@ -51,31 +51,12 @@ application-level check-then-insert is inherently racy under concurrent load.
 | Slot representation | Computed on the fly from working hours + fixed 30-min grid | A materialized `Slot` table | No sync problem if working hours change; availability is always derived from the `appointments` table, the actual source of truth. A materialized table needs regeneration logic whenever working hours change, and adds a second source of truth to keep consistent |
 | Concurrency control | DB partial unique index on `(doctor_id, slot_time) WHERE status='booked'`, plus `SELECT ... FOR UPDATE` for the common case | Check-then-insert with no lock/constraint; optimistic retry alone | The constraint is the real invariant — correct even if application logic has a bug. The row lock catches the common case (a slot someone already holds) before it ever reaches the DB constraint. Check-then-insert is the exact race condition pattern that causes double-booking |
 | Cancellation | Soft delete (`status`, `cancellation_reason`) | Hard delete | Preserves history for audit/reporting, standard for a system expected to grow. Hard delete loses history and complicates "prevent double-cancel" validation |
-| Reschedule | Single transaction: validate + lock new slot, only then cancel the old appointment and create the new one | Two separate API calls (cancel then book) | A failed reschedule must never lose the patient's original booking. Two separate calls aren't atomic and expose exactly the partial-failure window a reviewer would probe for |
+| Reschedule | Single transaction: validate + lock new slot, only then cancel the old appointment and create the new one | Two separate API calls (cancel then book) | A failed reschedule must never lose the patient's original booking. Two separate calls aren't atomic and expose a partial-failure window |
 | Timezone handling | All datetimes stored and compared in UTC (`TIMESTAMPTZ`) | Naive local time | Avoids DST ambiguity; correct today and if the clinic adds doctors in other timezones later. Naive local time is ambiguous under DST and breaks immediately with multiple timezones |
 | Auth | Minimal bearer-token scheme: token → `patient_id`, never trusted from the request body | Full OAuth2/identity provider | Closes the "book on behalf of anyone" hole with minimal scope. Full OAuth is out of scope for a 3–5 day exercise; noted as a real gap for production — see Non-Goals |
 | Framework | FastAPI, async SQLAlchemy 2.0 | Django REST Framework | Async fits a booking API's I/O-bound profile; Pydantic gives strong request/response validation and clean 422 error bodies for free; explicit control over locking/transactions rather than ORM magic hiding the concurrency-critical path |
 | Layering | Repository pattern: `AppointmentRepository` (abstract) / `PostgresAppointmentRepository` (concrete), a thin `BookingService` for orchestration, `app/exceptions.py` for the error hierarchy | Business logic + persistence + exceptions in one `services/booking.py` file | Real single-responsibility, not just file-per-module: the service has no SQL/session handling, the repository has no business rules. Swapping the backing store means writing a new repository, not touching business logic |
 
-## A Refactor Worth Documenting: Separating Concerns in the Booking Logic
-
-The first working version of the booking logic lived in a single `services/booking.py`
-combining the exception hierarchy, business validation, and persistence/locking mechanics —
-it worked and was fully tested, but mixed three responsibilities that should be independently
-testable and independently replaceable. Refactored into `app/exceptions.py` (business rules
-only), `app/repositories/appointment/base.py` (an abstract interface defining the
-atomicity + conflict-signaling contract any backing store must satisfy),
-`app/repositories/appointment/postgres.py` (the Postgres implementation owning
-`SELECT ... FOR UPDATE`, commit/rollback, `IntegrityError` translation), and
-`app/services/booking.py`'s `BookingService` (zero SQL, zero session handling — only
-validation and orchestration, injected with a repository via FastAPI's `Depends()`).
-
-This is real Open/Closed, not aspirational: a new backend means implementing
-`AppointmentRepository`, not touching `BookingService`. One honest caveat — the concurrency
-guarantees this system depends on (row locking + a partial unique constraint) are fairly
-Postgres-specific, so swapping databases wouldn't preserve those exact guarantees for free. The
-separation is still worth it for readability and testability even where "swap the database" is
-more theoretical than likely here.
 
 ## Architecture / Component Overview
 
@@ -147,15 +128,6 @@ Deliberately no `email`/`phone` exposed via any patient-facing endpoint.
 **DB constraint:** partial unique index `uq_doctor_slot_when_booked` on
 `(doctor_id, slot_time) WHERE status = 'booked'`.
 
-## A Concurrency Bug Found During Development
-
-Worth documenting honestly: the first implementation of the booking transaction wrapped the
-insert in a context manager that never actually issued a `COMMIT`. A concurrency test firing 10
-simultaneous requests at the same slot showed **10 successes** — every request silently rolled
-back and the next one slipped through serially, so the DB constraint never got a chance to do its
-job. Fixed by making each service call own an explicit `commit()`/`rollback()`. Re-run with the
-same 10-concurrent-request test: exactly 1 success, 9 conflicts, verified against a real Postgres
-instance (not mocked). The same fix was needed in the reschedule path for the same reason.
 
 ## Risks & Open Questions
 

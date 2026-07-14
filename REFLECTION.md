@@ -1,14 +1,24 @@
 # AI Reflection
 
-*(Drafted based on the actual development session — reviewed and adjusted to match my own
-experience.)*
-
 ## 1. What did you use AI for across the four sections?
 
-- **Section 1:** drafted the initial system design doc structure and decision table, which I
-  then reviewed and approved.
-- **Section 2:** generated the FastAPI scaffold, models, services, and routes; wrote the
-  initial test suite alongside each piece.
+I maintain a set of personal skills — reusable prompt/process specs that define what "good"
+looks like for a given kind of work (an engineering skill, a debugging skill, a documentation
+skill, etc.). The engineering skill in particular enforces a strict project kickoff order:
+
+```
+1. Design Document   →   defines WHAT and WHY. Locks scope.
+2. Tickets           →   defines HOW and WHEN. Breaks scope into work.
+3. Code              →   executes the plan.
+```
+
+No code until both the design doc and tickets exist and are confirmed. Across all four
+sections, AI was used within that structure rather than as an ad-hoc code generator:
+
+- **Section 1:** drafted the initial system design doc structure and decision table against
+  the engineering skill's format, which I then reviewed and approved before any code existed.
+- **Section 2:** generated the FastAPI scaffold, models, services, and routes ticket by ticket;
+  wrote the initial test suite alongside each piece.
 - **Section 3:** wrote the Dockerfile, docker-compose.yml, and GitHub Actions workflow; walked
   through debugging the real deployment issues (driver mismatch, port mismatch, internal vs.
   public DB hostname) as they came up live.
@@ -16,35 +26,48 @@ experience.)*
 
 ## 2. Give one example where an AI suggestion improved your work. What did you prompt it with?
 
-After the ticket breakdown was approved, I said "continue" through each ticket. When building
-the booking service (CLINIC-006), the AI proactively wrote a concurrency test firing 10
-simultaneous requests at the same slot *before* moving on to the next ticket, rather than just
-trusting the code looked correct — this is what surfaced the transaction-commit bug described
-below. Without that test being written and run as part of the ticket's own "done when" criteria,
-the bug would likely have shipped.
+I originally preferred scoping AI working sessions per ticket — one ticket, one session, on
+the theory that smaller scope means tighter control. AI suggested scoping per *epic* instead
+(a group of related tickets completed in one continuous session), and this measurably improved
+output quality within each session — more consistent context across related pieces of a
+feature, fewer contradictions between files that were supposed to agree with each other.
+
+I prompted it with the job-to-be-done straight from the assessment PDF combined with my
+engineering skill, specifically the kickoff-order rule above — the skill's insistence on
+design → tickets → code before any code gets written is what made per-epic scoping viable in
+the first place, since the epic's tickets were already fully defined and mutually consistent
+before implementation started.
 
 ## 3. Give one example where AI output was wrong or incomplete and how you caught it.
 
-The first version of `book_appointment` wrapped the insert in `async with db.begin_nested() if
-db.in_transaction() else db.begin():` but never called `commit()` after it. This looked
-plausible — the DB partial unique constraint was documented as the "real" safety net — but the
-concurrency test run against real Postgres showed **10/10 requests succeeding**, which is
-obviously wrong for a single 30-minute slot. Investigating showed each transaction was silently
-rolling back on session close (no commit), letting the next one through serially — the exact
-opposite of the guarantee being tested for. The fix was an explicit `commit()`/`rollback()` in
-each service call; the same class of bug also existed in a fixture that touched an
-already-expired ORM attribute after a rollback (`MissingGreenlet` errors), and in a coverage
-measurement gap (SQLAlchemy's async engine uses greenlet-based context switching that
-coverage.py's default tracer doesn't follow, making the route layer look ~40 points less tested
-than it actually was until `concurrency = greenlet` was set in `.coveragerc`). All three were
-caught by actually running things against a real Postgres instance rather than trusting the
-code by inspection.
+**Missing type imports causing a circular-import fix attempt.** In `app/models/appointment.py`
+and `app/models/doctor.py`, Pylance flagged missing type imports for the relationship
+annotations between the two models. Prompting AI for a fix produced a second, worse problem:
+a genuine circular import between the two model files, since each imports the other's type for
+its `relationship()` annotation. We resolved this properly using `TYPE_CHECKING` — importing
+the cross-referenced type only under `if TYPE_CHECKING:` and quoting the annotation, which
+satisfies the type checker without creating a runtime circular import. The first AI fix
+attempt didn't catch this on its own; it took a follow-up round specifically pointing at the
+circular import to get to the `TYPE_CHECKING` pattern.
 
 ## 4. Name two decisions you made without AI. Why did you trust your own judgment there?
 
-- Choosing FastAPI over Django REST Framework — a stack preference informed by what the role's
-  concurrency-heavy scenario calls for, not something to defer.
-- Deciding that "doctor not found during reschedule" is acceptable as a low-coverage defensive
-  branch rather than something to force-test, since the FK's `ON DELETE CASCADE` makes it
-  unreachable via the API in practice — a judgment call about where test effort is well spent
-  versus where it would just be padding a coverage number.
+**Decoupling the booking service for single responsibility.** The first working version of the
+booking logic lived in one `services/booking.py` combining the exception hierarchy, business
+validation, and persistence/locking mechanics. It worked and was fully tested, but the smell
+was strong enough that I didn't need AI to flag it — from experience, when one file is doing
+validation, orchestration, and raw SQL/locking all at once, that's the textbook sign it's doing
+more than one job. I made the call to decouple into `app/exceptions.py` (business rules only),
+an abstract `AppointmentRepository` (the atomicity + conflict-signaling contract any backing
+store must satisfy), a concrete `PostgresAppointmentRepository` (owning `SELECT ... FOR UPDATE`,
+commit/rollback, `IntegrityError` translation), and a `BookingService` with zero SQL and zero
+session handling. I still used AI to actually perform the refactor once I'd decided on it, but
+detecting the smell and deciding it was worth fixing was mine.
+
+**Choosing Make for developer-speed shorthands.** Adding `make token`, `make psql`, `make seed`,
+etc. wasn't an AI suggestion — it came from experience that a clear, named "job to be done"
+(`make token` instead of remembering a multi-line Python one-liner) builds a mental model that
+lets a developer ship and work faster, especially useful returning to a project cold after time
+away. This is a workflow-ergonomics call, not a correctness one, so it's the kind of judgment
+that comes from having felt the friction of *not* having it on past projects rather than
+something to defer to AI.

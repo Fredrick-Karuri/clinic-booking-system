@@ -9,9 +9,9 @@ strictly required by pytest's default import-mode given this package layout, but
 command work the same way regardless of invocation context (different cwd, IDE runner, etc.)
 rather than relying on an implicit pytest behavior.
 
-**52/52 tests passing, 98% coverage** on `app/`, stable across repeated runs.
+**52/52 tests passing, 95% coverage** on `app/`, stable across repeated runs.
 
-Everything runs against a **real Postgres instance**, not SQLite or mocks — the concurrency
+Everything runs against a **real Postgres instance** — the concurrency
 guarantees under test (`SELECT ... FOR UPDATE`, the partial unique constraint) are Postgres-
 specific behavior a lighter-weight substitute can't faithfully reproduce.
 
@@ -23,36 +23,11 @@ specific behavior a lighter-weight substitute can't faithfully reproduce.
   the same new slot simultaneously; exactly 1 succeeds, the loser's original appointment is
   confirmed still intact.
 
-## Getting an Accurate Coverage Number Took Two Real Fixes
 
-**Event loop / connection pool mismatch.** `pytest.ini` originally used a session-scoped
-event loop while DB fixtures were function-scoped, causing `InterfaceError`/`RuntimeError`
-failures as connections got torn down on a loop that outlived them. Fixed by using
-function-scoped loops (`asyncio_default_fixture_loop_scope = function`) *and* adding an
-autouse fixture that overrides the app's `get_db_session` dependency to use each test's own
-engine — without that override, the app's module-level singleton engine (bound to whatever
-loop happened to create it first) would conflict with per-test loops the moment more than one
-async test ran.
-
-**Coverage under-reporting by ~40 points.** SQLAlchemy's async extension uses greenlet-based
-context switching, and FastAPI runs sync dependency functions in a threadpool — coverage.py's
-default tracer follows neither. `.coveragerc` now sets `concurrency = greenlet, thread`; before
-this, `app/api/deps.py` and the repository's `IntegrityError`-handling branch looked completely
-untested despite being exercised by every test that hit them.
-
-## Uncovered Lines, and Why
-
-The remaining ~2% of uncovered lines are documented, not silently ignored:
-
-- Two branches unreachable via the API (the doctor FK has `ondelete=CASCADE`, so an
-  appointment can never point at a deleted doctor).
-- The repository's `IntegrityError` backstop path in `reschedule()` — hit inconsistently
-  across runs depending on task-scheduling timing under the concurrency test, a genuinely
-  racy line, confirmed by running coverage three times in a row and seeing it flip.
-- The real `get_db_session` implementation — never exercised by the test suite by design,
-  since tests override it to use their own engine (it does run in every actual request in
-  the deployed app).
-- Two cosmetic `__repr__` methods.
+Coverage is tracked with `concurrency = greenlet, thread` set in `.coveragerc`, since
+SQLAlchemy's async extension (greenlet-based) and FastAPI's threadpool-run sync dependencies
+aren't followed by coverage.py's default tracer — see [REFLECTION.md](../REFLECTION.md) for the
+story of catching and fixing this.
 
 ## Test Files
 

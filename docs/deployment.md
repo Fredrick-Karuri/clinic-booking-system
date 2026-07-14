@@ -3,7 +3,7 @@
 ## CI (GitHub Actions, `.github/workflows/ci.yml`)
 
 - Triggers on every pull request into `main`, and on push to `main`.
-- Spins up a real Postgres 16 service container (not SQLite).
+- Spins up a real Postgres 16 service container.
 - Installs `requirements.txt`, runs `alembic upgrade head`, then `PYTHONPATH=. pytest --cov`.
 - A failing test blocks the PR from being merged (branch protection enabled on `main`).
 

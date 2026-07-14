@@ -19,9 +19,6 @@ the format most log aggregators parse natively without extra config on their end
 - `LOG_LEVEL` env var controls verbosity (default `INFO`); `sqlalchemy.engine`'s per-statement
   logging is suppressed unless `LOG_LEVEL=DEBUG`, since it's extremely noisy otherwise.
 
-Verified live, not just by reading the code: booked a slot, forced a conflict, rescheduled,
-attempted a double-cancel, and sent a malformed auth token — confirmed each produced the
-expected structured log line before writing this doc.
 
 ## What's Deliberately Not Here (Yet), and What I'd Add First
 

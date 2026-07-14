@@ -33,6 +33,8 @@ Once running (locally or via the deployed URL), a patient can:
 ```bash
 git clone https://github.com/Fredrick-Karuri/clinic-booking-system
 cd clinic-booking-system
+make venv                      # creates .venv (used for local scripts like `make token`/`make seed`)
+source .venv/bin/activate
 cp .env.example .env
 make up        # builds the app image, starts Postgres + the API via Docker Compose
 make migrate    # in a second terminal, once the DB is healthy
