@@ -1,7 +1,7 @@
 """
 app/api/routes/patients.py
 
-GET /patients/{id}/appointments — CLINIC-011 (bonus). Returns the
+GET /patients/{id}/appointments (bonus). Returns the
 requesting patient's upcoming (booked, future) appointments sorted by
 slot_time ascending. A patient can only list their own appointments —
 {id} in the path must match the authenticated patient_id.

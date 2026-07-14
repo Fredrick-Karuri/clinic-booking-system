@@ -12,6 +12,8 @@ are already taken.
 
 from datetime import date, datetime, time, timedelta, timezone
 
+from app.exceptions import PastDateError
+
 
 def generate_slot_grid(
     work_start: time,
@@ -67,6 +69,20 @@ def compute_available_slots(
         free_slots = [slot for slot in free_slots if slot >= cutoff]
 
     return free_slots
+
+
+def validate_target_date(target_date: date, now: datetime) -> None:
+    """
+    Raise PastDateError if target_date is strictly before now's date.
+
+    See docs/architecture.md's decision table for why this is a 400
+    rather than a 200 + empty list: past dates are treated as an
+    invalid query, consistent with how POST /appointments treats a
+    past slot_time as a validation failure rather than a normal
+    "unavailable" result.
+    """
+    if target_date < now.date():
+        raise PastDateError(f"Date {target_date.isoformat()} is in the past.")
 
 
 def is_slot_on_grid(

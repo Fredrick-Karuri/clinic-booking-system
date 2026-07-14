@@ -51,3 +51,6 @@ class AppointmentAlreadyCancelledError(BookingError):
 
 class NotAppointmentOwnerError(BookingError):
     pass
+
+class PastDateError(BookingError):
+    """Raised when availability is requested for a date strictly before today."""
