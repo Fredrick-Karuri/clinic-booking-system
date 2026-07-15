@@ -4,10 +4,7 @@
 make test
 ```
 
-Runs `PYTHONPATH=. pytest --cov --cov-report=term-missing` — the explicit `PYTHONPATH=.` isn't
-strictly required by pytest's default import-mode given this package layout, but makes the
-command work the same way regardless of invocation context (different cwd, IDE runner, etc.)
-rather than relying on an implicit pytest behavior.
+Runs `PYTHONPATH=. pytest --cov --cov-report=term-missing`.
 
 **52/52 tests passing, 95% coverage** on `app/`, stable across repeated runs.
 
@@ -26,8 +23,7 @@ specific behavior a lighter-weight substitute can't faithfully reproduce.
 
 Coverage is tracked with `concurrency = greenlet, thread` set in `.coveragerc`, since
 SQLAlchemy's async extension (greenlet-based) and FastAPI's threadpool-run sync dependencies
-aren't followed by coverage.py's default tracer — see [REFLECTION.md](../REFLECTION.md) for the
-story of catching and fixing this.
+aren't followed by coverage.py's default tracer.
 
 ## Test Files
 

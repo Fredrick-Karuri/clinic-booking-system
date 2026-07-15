@@ -9,15 +9,17 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
 from app.api.routes import appointments, doctors, patients
+from app.core.config import get_settings
 from app.core.logging_config import configure_logging
 from app.core.middleware import RequestLoggingMiddleware
 
 configure_logging()
+settings = get_settings()
 
 app = FastAPI(
-    title="Clinic Booking API",
-    description="Backend API for booking, cancelling, and rescheduling clinic appointments.",
-    version="0.1.0",
+    title=settings.app_title,
+    description=settings.app_description,
+    version=settings.app_version,
 )
 
 app.add_middleware(RequestLoggingMiddleware)

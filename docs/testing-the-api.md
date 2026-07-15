@@ -4,9 +4,7 @@ A step-by-step script for demoing or manually exercising the full booking flow �
 against the deployed URL. Auth here is intentionally minimal (see
 [architecture.md](architecture.md#non-goals-explicit-out-of-scope) — there's no registration
 endpoint), so generating a token requires `AUTH_TOKEN_SEED`, which only exists locally or on
-the deployed instance itself. This script is written to be run by whoever has that access —
-typically the maintainer, live-walking someone else through it.
-
+the deployed instance itself.
 ## 1. Get a Bearer Token
 
 Every write endpoint needs one (see [api.md](api.md#auth)):
