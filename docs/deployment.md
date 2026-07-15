@@ -53,13 +53,3 @@ production DB via `railway run` failed with `socket.gaierror` — Railway's defa
 *inside* Railway's private network, not from a local machine. Fixed by using the public proxy
 connection string (visible under the Postgres service's Connect tab → Public Network) for any
 one-off local scripts that need to reach the production DB directly.
-
-## Seeding Is a One-Time Bootstrap, Not a Pipeline Step
-
-Migrations (schema) run automatically on every deploy via the Dockerfile — that's meant to be
-repeatable and idempotent. Seeding (the 5 sample doctors) is a one-off action triggered manually
-once against production, not wired into CI/CD — there's no ongoing need to reseed on every
-deploy, and doing so automatically would risk duplicate rows if the seed script isn't
-idempotent. `DATABASE_URL` for one-off local scripts against production is passed explicitly on
-the command line and is never stored as a GitHub secret, since GitHub Actions never touches the
-production database at all — only the ephemeral Postgres container CI spins up for itself.

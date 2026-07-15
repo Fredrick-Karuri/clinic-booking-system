@@ -23,6 +23,17 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/clinic"
     environment: str = "development"
 
+    slot_duration_minutes: int = DEFAULT_SLOT_DURATION_MINUTES
+    booking_lead_time_minutes: int = DEFAULT_BOOKING_LEAD_TIME_MINUTES
+
+    auth_token_seed: str = "dev-only-insecure-seed-change-in-production"
+
+    log_level: str = "INFO"
+
+    app_title: str = "Clinic Booking API"
+    app_description: str = "Backend API for booking, cancelling, and rescheduling clinic appointments."
+    app_version: str = "0.1.0"
+
     @field_validator("database_url")
     @classmethod
     def _force_asyncpg_driver(cls, v: str) -> str:
@@ -33,14 +44,6 @@ class Settings(BaseSettings):
         if v.startswith("postgresql://"):
             return v.replace("postgresql://", "postgresql+asyncpg://", 1)
         return v
-
-
-    slot_duration_minutes: int = DEFAULT_SLOT_DURATION_MINUTES
-    booking_lead_time_minutes: int = DEFAULT_BOOKING_LEAD_TIME_MINUTES
-
-    auth_token_seed: str = "dev-only-insecure-seed-change-in-production"
-
-    log_level: str = "INFO"
 
 
 @lru_cache
